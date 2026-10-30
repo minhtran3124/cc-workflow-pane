@@ -1,6 +1,6 @@
 {
   "name": "workflow-pane",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A pane that shows the agents of a running workflow: what each one does now, how long it runs, and what phase comes next",
   "author": {
     "name": "Minh Tran"
