@@ -12,17 +12,19 @@ The first lines show the run:
 - A progress bar, the time since the first agent started, and the tokens that the agents used.
 - `next ▸ <phase>`, the phase after the current one.
 
-Under them, the pane lists the agents that are running. Each agent has two lines:
+Under them, the pane lists the agents of the latest run, newest first. Every running agent has a block of three lines:
 
 ```
 ⠹ $ work-1                 33s
   Bash sleep 20 · running 6s
+  sonnet-5-5 · low
 ```
 
 1. A spinner, an icon, the agent label and the time it runs.
-2. The tool that the agent calls now, with its main argument, and `running` or `done`.
+2. The tool that the agent called last, with its main argument, and `running` or `done`.
+3. The model of the agent, and the effort it thinks with (`low`, `medium`, `high`, `xhigh` or `max`). A model that takes no effort shows the model alone.
 
-An agent that has finished is counted in the first line. The pane does not list it. When all agents of the run finish, the pane shows `▾ FINISHED` and the count.
+Finished agents stay in the list, under `─ finished`. Each has one line with `✓`, an icon, the label, the time it ran and the tokens it used. An agent that ended with an error or was stopped has `✗` in red. The first line then counts it as `✗`. A run that is older than the latest one is not listed.
 
 ### Icons
 
@@ -41,6 +43,23 @@ The icon shows what the agent does. The mod uses the current tool first. If the 
 | `⚗`  | A label with test, probe                              |
 | `≡`  | A label with summarize, wrap, report                  |
 | `•`  | The mod cannot tell                                   |
+
+## Detail mode
+
+Run `/workflow-pane detail on` to see the tool calls of the agents. Each of the three newest running agents then shows its last three tool calls, in place of the single tool line:
+
+```
+⠹ $ work-1                 33s
+  ● Bash  sleep 17
+    └ (Bash completed with no output)
+  ● Bash  echo review-diff
+    └ review-diff
+  ● Bash  sleep 17
+    └ running…
+  sonnet-5-5 · low
+```
+
+A green dot is a finished call, an amber dot a call that runs, and a red dot a call that failed. The line under it is the first line of the output. Other running agents keep the short view. Run `/workflow-pane detail off` to go back, or `/workflow-pane detail` to switch. The setting lasts for the session.
 
 ## Limits
 
@@ -82,6 +101,10 @@ To load the mod in every session, add the folder's absolute path to `CLAUDE_CODE
 
 ```
 /workflow-pane              open the pane
+/workflow-pane off          close the pane
+/workflow-pane detail       switch detail mode on or off
+/workflow-pane detail on    show the tool calls of the newest running agents
+/workflow-pane detail off   show one tool line for each agent
 ```
 
 ## Develop
