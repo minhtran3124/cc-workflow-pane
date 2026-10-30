@@ -9,8 +9,10 @@ The pane opens when a session starts. Run `/workflow-pane` to open it again. The
 The first lines show the run:
 
 - `◈ N agents`, then the number of running agents (`●`) and finished agents (`✓`).
-- A progress bar, the time since the first agent started, and the tokens that the agents used.
+- A progress bar, the percent of agents that finished, the time since the first agent started, and the tokens that the agents used.
 - `next ▸ <phase>`, the phase after the current one.
+
+The bar has 20 cells. A `▰` cell is one share of the agents that finished, and its colour goes from amber to green. A `▱` cell is one share that is not finished. While the run is live, a shade slides along the filled cells. When the run ends, the shade stops and the whole bar is green.
 
 Under them, the pane lists the agents of the latest run, newest first. Every running agent has a block of three lines:
 
@@ -96,6 +98,25 @@ claude --plugin-dir ./cc-workflow-pane
 ```
 
 To load the mod in every session, add the folder's absolute path to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`.
+
+## Update
+
+Check the version that you have with `claude plugin list`. [CHANGELOG.md](CHANGELOG.md) lists what each version changes.
+
+If you installed the mod from the marketplace, get the new version with two commands, then restart Claude Code:
+
+```sh
+claude plugin marketplace update cc-workflow-pane
+claude plugin update workflow-pane@cc-workflow-pane
+```
+
+If you cloned the repository, pull the new version, then restart Claude Code:
+
+```sh
+git -C ./cc-workflow-pane pull
+```
+
+The new version only applies after a restart. A session that is already open keeps the old version.
 
 ## Commands
 
