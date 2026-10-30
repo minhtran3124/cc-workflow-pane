@@ -4,6 +4,10 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The progress track is longer, built from `▰` cells with an amber-to-green colour ramp, a shade that slides along it like a barber pole while the run is live, and a percent figure.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

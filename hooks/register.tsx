@@ -98,13 +98,28 @@ const dur = (ms: number) => {
 }
 const tok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
-// The progress track: filled cells, a glint that sweeps the rest while it runs.
-const track = (frac: number, width: number, tick: number) => {
-  const filled = Math.round(Math.min(1, Math.max(0, frac)) * width)
-  const rest = width - filled
-  const at = tick >= 0 && rest > 0 ? tick % (rest + 3) : -1
-  const glint = at >= 0 && at < rest
-  return { filled, before: glint ? at : rest, glint, after: glint ? rest - at - 1 : 0 }
+// Mix two #rrggbb colours; t = 0 gives a, t = 1 gives b.
+const mix = (a: string, b: string, t: number) => {
+  const c = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16)
+  const ch = (i: number) =>
+    Math.round(c(a, i) + (c(b, i) - c(a, i)) * Math.min(1, Math.max(0, t)))
+      .toString(16)
+      .padStart(2, '0')
+  return `#${ch(0)}${ch(1)}${ch(2)}`
+}
+
+// The progress track: ▰ cells with a colour ramp over the filled part. While it
+// runs, a two-cell shade slides along the filled cells like a barber pole.
+const TRACK = 20
+const track = (frac: number, tick: number, finished: boolean) => {
+  const filled = Math.round(Math.min(1, Math.max(0, frac)) * TRACK)
+  const shift = Math.max(0, tick)
+  return Array.from({ length: TRACK }, (_, i) => {
+    if (i >= filled) return { ch: '▱', color: undefined, dim: true }
+    const base = finished ? mix(GREEN, '#7ee787', i / TRACK) : mix(AMBER, GREEN, i / Math.max(1, filled - 1))
+    const shaded = !finished && (i + shift) % 4 >= 2
+    return { ch: '▰', color: shaded ? mix(base, '#000000', 0.45) : base, dim: false }
+  })
 }
 
 export const register: Register = on => {
@@ -267,7 +282,8 @@ export const register: Register = on => {
     const older = sorted.filter(r => r.endedAt)
     // The pane's own width, not the terminal's: the time wraps when this is too wide.
     const w = Math.max(24, (e.props as { bodyColumns?: number }).bodyColumns ?? 40) - 1
-    const bar = track(doneN / list.length, 10, tick)
+    const bar = track(doneN / list.length, tick, finished)
+    const pct = Math.round((doneN / list.length) * 100)
 
     return (
       <Box flexDirection="column">
@@ -279,10 +295,12 @@ export const register: Register = on => {
           {failedN > 0 && <Text color={RED}>{`  ✗ ${failedN}`}</Text>}
         </Text>
         <Text>
-          <Text color={finished ? GREEN : AMBER}>{'━'.repeat(bar.filled)}</Text>
-          <Text dimColor>{'─'.repeat(bar.before)}</Text>
-          {bar.glint && <Text color={CYAN}>━</Text>}
-          <Text dimColor>{'─'.repeat(bar.after)}</Text>
+          {bar.map((c, i) => (
+            <Text color={c.color} dimColor={c.dim}>
+              {c.ch}
+            </Text>
+          ))}
+          <Text bold color={finished ? GREEN : AMBER}>{` ${pct}%`}</Text>
           <Text dimColor>
             {` ${dur(end - start)}`}
             {tokens ? ` · ↓ ${tok(tokens)} tok` : ''}
