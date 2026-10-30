@@ -168,6 +168,36 @@ describe('register', () => {
     await ui.unmount()
   })
 
+  test('shows the share of finished agents on the progress bar', async ($, on) => {
+    on('state.get', (_, e) =>
+      e.key === 'rows'
+        ? { value: { value: { shape: 'rows-6', value: ROWS }, version: 1 } }
+        : { value: { value: undefined, version: 0 } },
+    )
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    // One agent of three is finished: some cells are full, some are empty.
+    expect(await ui.find({ type: 'Text', text: /33%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '▰' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '▱' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('fills the progress bar when every agent has finished', async ($, on) => {
+    const done = ROWS.map(r => ({ ...r, endedAt: NOW - 500, isBusy: false }))
+    on('state.get', (_, e) =>
+      e.key === 'rows'
+        ? { value: { value: { shape: 'rows-6', value: done }, version: 1 } }
+        : { value: { value: undefined, version: 0 } },
+    )
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /100%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '▰' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '▱' })).toBeUndefined()
+    await ui.unmount()
+  })
+
   test('says so when no workflow ran', async ($, on) => {
     on('state.get', () => ({ value: { value: undefined, version: 0 } }))
 
