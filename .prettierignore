@@ -1,0 +1,5 @@
+# Types Claude Code writes when it loads the mod
+.claude-plugin/types/
+
+node_modules/
+package-lock.json

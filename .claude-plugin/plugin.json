@@ -1,0 +1,11 @@
+{
+  "name": "workflow-pane",
+  "version": "0.1.0",
+  "description": "A pane that shows the agents of a running workflow: what each one does now, how long it runs, and what phase comes next",
+  "author": {
+    "name": "Minh Tran"
+  },
+  "repository": "https://github.com/minhtran3124/cc-workflow-pane",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

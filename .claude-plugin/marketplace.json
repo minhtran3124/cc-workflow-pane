@@ -1,0 +1,14 @@
+{
+  "name": "cc-workflow-pane",
+  "description": "Claude Code mod that shows the agents of a running workflow in a pane",
+  "owner": {
+    "name": "Minh Tran"
+  },
+  "plugins": [
+    {
+      "name": "workflow-pane",
+      "source": "./",
+      "description": "A pane that shows the agents of a running workflow: what each one does now, how long it runs, and what phase comes next"
+    }
+  ]
+}
