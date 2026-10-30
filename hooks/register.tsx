@@ -71,7 +71,6 @@ const iconFor = (r: Row) => {
 }
 
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const EIGHTHS = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
 
 const dur = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000))
@@ -80,22 +79,13 @@ const dur = (ms: number) => {
 }
 const tok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
-// Smooth bar: `frac` of `width` cells, eighth-block precision.
-const bar = (frac: number, width: number, tick = -1) => {
-  const eighths = Math.round(Math.min(1, Math.max(0, frac)) * width * 8)
-  const full = Math.floor(eighths / 8)
-  const part = eighths % 8
-  const used = full + (part ? 1 : 0)
-  const empty = ' '
-    .repeat(width - used)
-    .split('')
-    .map(() => '░')
-  if (tick >= 0 && empty.length > 0) {
-    const at = tick % (empty.length + 4)
-    if (at < empty.length) empty[at] = '▓'
-    if (at - 1 >= 0 && at - 1 < empty.length) empty[at - 1] = '▒'
-  }
-  return '█'.repeat(full) + (part ? EIGHTHS[part] : '') + empty.join('')
+// The progress track: filled cells, a glint that sweeps the rest while it runs.
+const track = (frac: number, width: number, tick: number) => {
+  const filled = Math.round(Math.min(1, Math.max(0, frac)) * width)
+  const rest = width - filled
+  const at = tick >= 0 && rest > 0 ? tick % (rest + 3) : -1
+  const glint = at >= 0 && at < rest
+  return { filled, before: glint ? at : rest, glint, after: glint ? rest - at - 1 : 0 }
 }
 
 export const register: Register = on => {
@@ -194,7 +184,9 @@ export const register: Register = on => {
     const spin = SPIN[Math.floor(now / 100) % SPIN.length]
     const tick = finished ? -1 : Math.floor(now / 150)
     const room = Math.max(1, Math.floor(((e.viewport?.rows ?? 24) - 8) / 3))
-    const w = Math.max(24, (e.viewport?.columns ?? 40) - 4)
+    // The pane's own width, not the terminal's: the time wraps when this is too wide.
+    const w = Math.max(24, (e.props as { bodyColumns?: number }).bodyColumns ?? 40) - 1
+    const bar = track(doneN / list.length, 10, tick)
 
     return (
       <Box flexDirection="column">
@@ -204,10 +196,16 @@ export const register: Register = on => {
           <Text color={AMBER}>{`  ● ${live.length}`}</Text>
           <Text color={GREEN}>{`  ✓ ${doneN}`}</Text>
         </Text>
-        <Text dimColor>
-          {bar(doneN / list.length, 12, tick)} {dur(end - start)}
-          {tokens ? ` · ↓ ${tok(tokens)} tok` : ''}
-          {upcoming && !finished ? ` · next ▸ ${upcoming}` : ''}
+        <Text>
+          <Text color={finished ? GREEN : AMBER}>{'━'.repeat(bar.filled)}</Text>
+          <Text dimColor>{'─'.repeat(bar.before)}</Text>
+          {bar.glint && <Text color={CYAN}>━</Text>}
+          <Text dimColor>{'─'.repeat(bar.after)}</Text>
+          <Text dimColor>
+            {` ${dur(end - start)}`}
+            {tokens ? ` · ↓ ${tok(tokens)} tok` : ''}
+            {upcoming && !finished ? ` · next ▸ ${upcoming}` : ''}
+          </Text>
         </Text>
         <Text> </Text>
         {live.length > 0 && (
@@ -224,7 +222,7 @@ export const register: Register = on => {
           {`⧉ ${runId}`}
         </Text>
         {live.slice(0, room).map(r => {
-          const name = r.label.slice(0, Math.max(8, w - 14))
+          const name = r.label.slice(0, Math.max(8, w - 11))
           const t = dur(now - r.startedAt)
           const [tool, ...rest] = (r.lastTool ?? '').split(': ')
           return (
@@ -232,7 +230,7 @@ export const register: Register = on => {
               <Text>
                 <Text color={CYAN}>{`${spin} `}</Text>
                 <Text color={AMBER}>{`${iconFor(r)} `}</Text>
-                <Text>{name.padEnd(Math.max(8, w - 14))}</Text>
+                <Text>{name.padEnd(Math.max(8, w - 11))}</Text>
                 <Text dimColor>{t.padStart(6)}</Text>
               </Text>
               {r.lastTool ? (
@@ -240,7 +238,7 @@ export const register: Register = on => {
                   <Text>{'  '}</Text>
                   <Text color={CYAN}>{tool}</Text>
                   <Text dimColor>
-                    {` ${rest.join(': ')}`.slice(0, Math.max(6, w - 24))}
+                    {` ${rest.join(': ')}`.slice(0, Math.max(6, w - 27))}
                     {r.isBusy
                       ? ` · running ${dur(now - (r.lastAt ?? now))}`
                       : ` · done ${ago(now - (r.lastAt ?? now))}`}
