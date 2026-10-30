@@ -76,6 +76,18 @@ The tests cannot show how the pane looks. Test by hand in a real session as well
 
 Write the commit subject in the imperative, as in "Add an icon for MCP tools". Use the body to say why.
 
+## Release
+
+The maintainer does these steps for a new version:
+
+1. Set `version` in `.claude-plugin/plugin.json`.
+2. In `CHANGELOG.md`, move the entries of `[Unreleased]` under a new `[x.y.z] - date` heading.
+3. Commit with the subject `Release x.y.z`, and push `main`.
+4. Tag the release with `claude plugin tag --push --remote github`. It makes the tag `workflow-pane--vx.y.z`, and it fails if `plugin.json` and the marketplace entry do not agree.
+5. Create the GitHub Release from that tag, with the changelog entries as notes.
+
+Tags up to `v0.2.1` have the old name, `vx.y.z`. Leave them. New tags use the `workflow-pane--v` name.
+
 ## License
 
 When you contribute, you agree that your contribution is under the [MIT License](LICENSE).
