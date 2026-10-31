@@ -4,6 +4,10 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The pane shows every workflow that runs at the same time, each in its own block, not only the newest one. The `next ▸` phase shows for the newest run only.
+
 ## [0.2.1] - 2026-10-30
 
 ### Changed

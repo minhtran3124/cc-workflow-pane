@@ -262,120 +262,144 @@ export const register: Register = on => {
     }
 
     const now = Date.now()
-    const runId = all[all.length - 1].runId
-    const list = all.filter(r => r.runId === runId)
-    const names = await read($, phases)
     const isDetail = await read($, detail)
-    const upcoming = nextPhase(list, names)
-    const doneN = list.filter(r => r.endedAt).length
-    const failedN = list.filter(r => r.isFailed).length
-    const live = list.filter(r => !r.endedAt)
-    const finished = live.length === 0
-    const start = Math.min(...list.map(r => r.startedAt))
-    const end = finished ? Math.max(...list.map(r => r.endedAt ?? 0)) : now
-    const tokens = list.reduce((a, r) => a + r.tokens, 0)
+    const phaseNames = await read($, phases)
     const spin = SPIN[Math.floor(now / 100) % SPIN.length]
-    const tick = finished ? -1 : Math.floor(now / 150)
-    // Newest first. Every running agent gets a block; finished ones, one line each.
-    const sorted = [...list].sort((a, b) => b.startedAt - a.startedAt || b.index - a.index)
-    const top = sorted.filter(r => !r.endedAt)
-    const older = sorted.filter(r => r.endedAt)
     // The pane's own width, not the terminal's: the time wraps when this is too wide.
     const w = Math.max(24, (e.props as { bodyColumns?: number }).bodyColumns ?? 40) - 1
-    const bar = track(doneN / list.length, tick, finished)
-    const pct = Math.round((doneN / list.length) * 100)
+
+    // Group by run, oldest first. Show every run that overlaps a running one, so
+    // workflows started together stay side by side; else only the latest run.
+    const byRun = new Map<string, Row[]>()
+    for (const r of all) byRun.set(r.runId, [...(byRun.get(r.runId) ?? []), r])
+    const runs = [...byRun.entries()]
+    const liveStart = Math.min(...all.filter(r => !r.endedAt).map(r => r.startedAt))
+    const shown = runs.filter(([, l], i) =>
+      Number.isFinite(liveStart) ? l.some(r => !r.endedAt || (r.endedAt ?? 0) >= liveStart) : i === runs.length - 1,
+    )
+
+    const section = ([runId, list]: [string, Row[]], isLast: boolean) => {
+      // The phase titles belong to the latest Workflow call, so to the newest run.
+      const names = isLast ? phaseNames : []
+      const upcoming = nextPhase(list, names)
+      const doneN = list.filter(r => r.endedAt).length
+      const failedN = list.filter(r => r.isFailed).length
+      const live = list.filter(r => !r.endedAt)
+      const finished = live.length === 0
+      const start = Math.min(...list.map(r => r.startedAt))
+      const end = finished ? Math.max(...list.map(r => r.endedAt ?? 0)) : now
+      const tokens = list.reduce((a, r) => a + r.tokens, 0)
+      const tick = finished ? -1 : Math.floor(now / 150)
+      // Newest first. Every running agent gets a block; finished ones, one line each.
+      const sorted = [...list].sort((a, b) => b.startedAt - a.startedAt || b.index - a.index)
+      const top = sorted.filter(r => !r.endedAt)
+      const older = sorted.filter(r => r.endedAt)
+      const bar = track(doneN / list.length, tick, finished)
+      const pct = Math.round((doneN / list.length) * 100)
+
+      return (
+        <Box flexDirection="column">
+          <Text>
+            <Text color={CYAN}>◈ </Text>
+            <Text bold>{list.length} agents</Text>
+            <Text color={AMBER}>{`  ● ${live.length}`}</Text>
+            <Text color={GREEN}>{`  ✓ ${doneN - failedN}`}</Text>
+            {failedN > 0 && <Text color={RED}>{`  ✗ ${failedN}`}</Text>}
+          </Text>
+          <Text>
+            {bar.map((c, i) => (
+              <Text color={c.color} dimColor={c.dim}>
+                {c.ch}
+              </Text>
+            ))}
+            <Text bold color={finished ? GREEN : AMBER}>{` ${pct}%`}</Text>
+            <Text dimColor>
+              {` ${dur(end - start)}`}
+              {tokens ? ` · ↓ ${tok(tokens)} tok` : ''}
+              {upcoming && !finished ? ` · next ▸ ${upcoming}` : ''}
+            </Text>
+          </Text>
+          <Text> </Text>
+          <Text bold color={PINK}>
+            {`⧉ ${runId}`}
+          </Text>
+          {top.map((r, n) => {
+            const isDone = !!r.endedAt
+            const name = r.label.slice(0, Math.max(8, w - 11))
+            const t = dur((r.endedAt ?? now) - r.startedAt)
+            const [tool, ...rest] = (r.lastTool ?? '').split(': ')
+            return (
+              <Box flexDirection="column">
+                <Text>
+                  {isDone ? <Text color={GREEN}>{'✓ '}</Text> : <Text color={CYAN}>{`${spin} `}</Text>}
+                  <Text color={isDone ? undefined : AMBER} dimColor={isDone}>{`${iconFor(r)} `}</Text>
+                  <Text dimColor={isDone}>{name.padEnd(Math.max(8, w - 11))}</Text>
+                  <Text dimColor>{t.padStart(6)}</Text>
+                </Text>
+                {isDetail && n < DETAIL_MAX && r.log?.length ? (
+                  r.log.map(c => (
+                    <Box flexDirection="column">
+                      <Text>
+                        <Text color={c.isError ? RED : c.isDone ? GREEN : AMBER}>{'  ● '}</Text>
+                        <Text bold>{c.tool}</Text>
+                        <Text dimColor>{`  ${c.arg}`.slice(0, Math.max(6, w - 10))}</Text>
+                      </Text>
+                      <Text dimColor>{`    └ ${c.isDone ? (c.out ?? '') : 'running…'}`.slice(0, w)}</Text>
+                    </Box>
+                  ))
+                ) : r.lastTool ? (
+                  <Text>
+                    <Text>{'  '}</Text>
+                    <Text color={isDone ? undefined : CYAN} dimColor={isDone}>
+                      {tool}
+                    </Text>
+                    <Text dimColor>
+                      {` ${rest.join(': ')}`.slice(0, Math.max(6, w - 27))}
+                      {isDone
+                        ? ' · finished'
+                        : r.isBusy
+                          ? ` · running ${dur(now - (r.lastAt ?? now))}`
+                          : ` · done ${ago(now - (r.lastAt ?? now))}`}
+                    </Text>
+                  </Text>
+                ) : (
+                  <Text dimColor>{isDone ? '  finished' : '  starting…'}</Text>
+                )}
+                {(r.model || r.effort) && (
+                  <Text dimColor>{`  ${[r.model, r.effort].filter(Boolean).join(' · ')}`.slice(0, w)}</Text>
+                )}
+                <Text> </Text>
+              </Box>
+            )
+          })}
+          {older.length > 0 && <Text dimColor>{`─ finished · ${older.length}`}</Text>}
+          {older.map(r => {
+            const extra = r.tokens ? ` · ${tok(r.tokens)}` : ''
+            const nameW = Math.max(8, w - 11 - extra.length)
+            return (
+              <Text>
+                {r.isFailed ? <Text color={RED}>{'✗ '}</Text> : <Text color={GREEN}>{'✓ '}</Text>}
+                <Text dimColor>
+                  {`${iconFor(r)} `}
+                  {r.label.slice(0, nameW).padEnd(nameW)}
+                  {dur((r.endedAt ?? now) - r.startedAt).padStart(6)}
+                  {extra}
+                </Text>
+              </Text>
+            )
+          })}
+        </Box>
+      )
+    }
 
     return (
       <Box flexDirection="column">
-        <Text>
-          <Text color={CYAN}>◈ </Text>
-          <Text bold>{list.length} agents</Text>
-          <Text color={AMBER}>{`  ● ${live.length}`}</Text>
-          <Text color={GREEN}>{`  ✓ ${doneN - failedN}`}</Text>
-          {failedN > 0 && <Text color={RED}>{`  ✗ ${failedN}`}</Text>}
-        </Text>
-        <Text>
-          {bar.map((c, i) => (
-            <Text color={c.color} dimColor={c.dim}>
-              {c.ch}
-            </Text>
-          ))}
-          <Text bold color={finished ? GREEN : AMBER}>{` ${pct}%`}</Text>
-          <Text dimColor>
-            {` ${dur(end - start)}`}
-            {tokens ? ` · ↓ ${tok(tokens)} tok` : ''}
-            {upcoming && !finished ? ` · next ▸ ${upcoming}` : ''}
-          </Text>
-        </Text>
-        <Text> </Text>
-        <Text bold color={PINK}>
-          {`⧉ ${runId}`}
-        </Text>
-        {top.map((r, n) => {
-          const isDone = !!r.endedAt
-          const name = r.label.slice(0, Math.max(8, w - 11))
-          const t = dur((r.endedAt ?? now) - r.startedAt)
-          const [tool, ...rest] = (r.lastTool ?? '').split(': ')
-          return (
-            <Box flexDirection="column">
-              <Text>
-                {isDone ? <Text color={GREEN}>{'✓ '}</Text> : <Text color={CYAN}>{`${spin} `}</Text>}
-                <Text color={isDone ? undefined : AMBER} dimColor={isDone}>{`${iconFor(r)} `}</Text>
-                <Text dimColor={isDone}>{name.padEnd(Math.max(8, w - 11))}</Text>
-                <Text dimColor>{t.padStart(6)}</Text>
-              </Text>
-              {isDetail && n < DETAIL_MAX && r.log?.length ? (
-                r.log.map(c => (
-                  <Box flexDirection="column">
-                    <Text>
-                      <Text color={c.isError ? RED : c.isDone ? GREEN : AMBER}>{'  ● '}</Text>
-                      <Text bold>{c.tool}</Text>
-                      <Text dimColor>{`  ${c.arg}`.slice(0, Math.max(6, w - 10))}</Text>
-                    </Text>
-                    <Text dimColor>{`    └ ${c.isDone ? (c.out ?? '') : 'running…'}`.slice(0, w)}</Text>
-                  </Box>
-                ))
-              ) : r.lastTool ? (
-                <Text>
-                  <Text>{'  '}</Text>
-                  <Text color={isDone ? undefined : CYAN} dimColor={isDone}>
-                    {tool}
-                  </Text>
-                  <Text dimColor>
-                    {` ${rest.join(': ')}`.slice(0, Math.max(6, w - 27))}
-                    {isDone
-                      ? ' · finished'
-                      : r.isBusy
-                        ? ` · running ${dur(now - (r.lastAt ?? now))}`
-                        : ` · done ${ago(now - (r.lastAt ?? now))}`}
-                  </Text>
-                </Text>
-              ) : (
-                <Text dimColor>{isDone ? '  finished' : '  starting…'}</Text>
-              )}
-              {(r.model || r.effort) && (
-                <Text dimColor>{`  ${[r.model, r.effort].filter(Boolean).join(' · ')}`.slice(0, w)}</Text>
-              )}
-              <Text> </Text>
-            </Box>
-          )
-        })}
-        {older.length > 0 && <Text dimColor>{`─ finished · ${older.length}`}</Text>}
-        {older.map(r => {
-          const extra = r.tokens ? ` · ${tok(r.tokens)}` : ''
-          const nameW = Math.max(8, w - 11 - extra.length)
-          return (
-            <Text>
-              {r.isFailed ? <Text color={RED}>{'✗ '}</Text> : <Text color={GREEN}>{'✓ '}</Text>}
-              <Text dimColor>
-                {`${iconFor(r)} `}
-                {r.label.slice(0, nameW).padEnd(nameW)}
-                {dur((r.endedAt ?? now) - r.startedAt).padStart(6)}
-                {extra}
-              </Text>
-            </Text>
-          )
-        })}
+        {shown.map((run, i) => (
+          <Box flexDirection="column">
+            {i > 0 && <Text> </Text>}
+            {section(run, i === shown.length - 1)}
+          </Box>
+        ))}
       </Box>
     )
   })

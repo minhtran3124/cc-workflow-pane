@@ -198,6 +198,31 @@ describe('register', () => {
     await ui.unmount()
   })
 
+  test('shows every workflow that runs at the same time, not only the newest', async ($, on) => {
+    const three = ['wf_a', 'wf_b', 'wf_c'].map((runId, i) => ({
+      runId,
+      index: 1,
+      label: `job-${i + 1}`,
+      agentId: `x${i + 1}`,
+      startedAt: NOW - 9000 + i * 100,
+      tokens: 0,
+    }))
+    on('state.get', (_, e) =>
+      e.key === 'rows'
+        ? { value: { value: { shape: 'rows-6', value: three }, version: 1 } }
+        : { value: { value: undefined, version: 0 } },
+    )
+
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    for (const id of ['wf_a', 'wf_b', 'wf_c']) {
+      expect(await ui.find({ type: 'Text', text: new RegExp(id) })).toBeDefined()
+    }
+    for (const label of ['job-1', 'job-2', 'job-3']) {
+      expect(await ui.find({ type: 'Text', text: new RegExp(label) })).toBeDefined()
+    }
+    await ui.unmount()
+  })
+
   test('says so when no workflow ran', async ($, on) => {
     on('state.get', () => ({ value: { value: undefined, version: 0 } }))
 
